@@ -25,6 +25,19 @@ def print_state_value_function(V, P, n_cols=4, prec=3, title='State-value functi
             print(str(s).zfill(2), '{}'.format(np.round(v, prec)).rjust(6), end=" ")
         if (s + 1) % n_cols == 0: print("|")
 
+def render_policy(env, pi, max_steps=200):
+    state = env.reset()
+    state = state[0]
+    env.render()
+    done, steps = False, 0
+
+    while not done and steps < max_steps:
+        action = pi(state)
+        state, reward, done, info, _= env.step(action)
+        steps += 1
+
+    print(f"Reached state: {state}, Done: {done}, Steps: {steps}")
+
 def print_action_value_function(Q, optimal_Q=None, action_symbols=('<', '>'), prec=3, title='Action-value function:'):
     vf_types=('',) if optimal_Q is None else ('', '*', 'err')
     headers = ['s',] + [' '.join(i) for i in list(itertools.product(vf_types, action_symbols))]
@@ -36,67 +49,78 @@ def print_action_value_function(Q, optimal_Q=None, action_symbols=('<', '>'), pr
     print(tabulate(arr, headers, tablefmt="fancy_grid"))
 
 def probability_success(env, pi, goal_state, n_episodes=100, max_steps=200):
-    random.seed(123); np.random.seed(123) ; env.seed(123)
+    random.seed(123); np.random.seed(123)
     results = []
     for _ in range(n_episodes):
         state, done, steps = env.reset(), False, 0
+        state = state[0]
         while not done and steps < max_steps:
-            state, _, done, h = env.step(pi(state))
+            state, r, done, _, _ = env.step(pi(state))
             steps += 1
         results.append(state == goal_state)
-    return np.sum(results)/len(results)
+    return float(np.sum(results)/len(results))
 
 def mean_return(env, pi, n_episodes=100, max_steps=200):
     random.seed(123); np.random.seed(123)
     results = []
     for _ in range(n_episodes):
         state, done, steps = env.reset(), False, 0
+        state = state[0]
         results.append(0.0)
         while not done and steps < max_steps:
-            state, reward, done, _ = env.step(pi(state))
+            state, reward, done, _, _ = env.step(pi(state))
             results[-1] += reward
             steps += 1
-    return np.mean(results)
+    return float(np.mean(results))
 
 def policy_evaluation(P, pi, gamma=1.0, theta=1e-10):
-    nS = len(P.keys())
-    V = np.zeros(nS)
+    prev_V = np.zeros(len(P), dtype=np.float64)
     while True:
-        prev_V = np.copy(V)
-        for s in range(nS):
-            v = 0
-            for proba, next_s, reward, done in P[s][pi(s)]:
-                v += proba * (reward + gamma * prev_V[next_s] * (not done))
-            V[s] = v
+        V = np.zeros(len(P), dtype=np.float64)
+        for s in range(len(P)):
+            for prob, next_state, reward, done in P[s][pi(s)]:
+                V[s] += prob * (reward + gamma * prev_V[next_state] * (not done))
         if np.max(np.abs(prev_V - V)) < theta:
             break
+        prev_V = V.copy()
     return V
 
 def policy_improvement(P, V, gamma=1.0):
-    nS, nA = len(P.keys()), len(P[0].keys())
+    nS, nA = len(P), len(P[0].keys())
     Q = np.zeros((nS, nA))
 
     for s in range(nS):
-        for a in range(nA):
+        for a in range(len(P[s].keys())):
             for proba, next_s, reward, done in P[s][a]:
-                Q[s, a] += proba * (reward + gamma * V[next_s] * (not done))
+                Q[s][a] += proba * (reward + gamma * V[next_s] * (not done))
     
     new_pi = lambda s: {s:a for s, a in enumerate(np.argmax(Q, axis=1))}[s]
     return new_pi
 
 def policy_iteration(P, gamma=1.0, theta=1e-10):
-    nS, nA = len(P.keys()), len(P[0].keys())
-    pi = lambda s: {s:np.random.choice(range(nA)) for s in range(nS)}[s]
+    random_actions = np.random.choice(tuple(P[0].keys()), len(P))
+    pi = lambda s: {s:a for s, a in enumerate(random_actions)}[s]
     while True:
-        old_pi = lambda s: {s:pi(s) for s in range(nS)}[s]
+        old_pi = {s:pi(s) for s in range(len(P))}
         V = policy_evaluation(P, pi, gamma, theta)
         pi = policy_improvement(P, V, gamma)
-        print_policy(pi, P)
-        is_equal = True
-        for s in range(nS):
-            if pi(s) != old_pi(s):
-                is_equal = False
-                break
-        if is_equal:
+        if old_pi == {s:pi(s) for s in range(len(P))}:
             break
+    return pi, V
+
+def value_iteration(P, gamma=1.0, theta=1e-10):
+    nS, nA = len(P), len(P[0].keys())
+    V = np.zeros(nS, dtype=np.float64)
+    while True:
+        Q = np.zeros((nS, nA))
+        for s in range(nS):
+            for a in range(nA):
+                for prob, next_state, reward, done in P[s][a]:
+                    Q[s][a] += prob * (reward + gamma * V[next_state] * (not done))
+        
+        if np.max(np.abs(V - np.max(Q, axis=1))) < theta:
+            break
+        V = np.max(Q, axis=1)
+    
+    pi = lambda s: {s:a for s, a in enumerate(np.argmax(Q, axis=1))}[s]
     return pi, V
