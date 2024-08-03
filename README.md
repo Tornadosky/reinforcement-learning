@@ -21,19 +21,20 @@ For a 4x4 grid, the maximum observation value is 15 (bottom-right corner).
 ### Optimal Policy
 
 The optimal policy has been calculated to reach the goal with a success rate of 74% and an average undiscounted return of 0.7400. Here is the policy for the 4x4 environment:
-
+<pre>
 | 00      < | 01      ^ | 02      ^ | 03      ^ |<br />
 | 04      < |           | 06      < |           |<br />
 | 08      ^ | 09      v | 10      < |           |<br />
 |           | 13      > | 14      v |           |
+</pre>
 
 ### State-Value Function
 
 The state-value function under the optimal policy is as follows:
 
+<pre>
 | 00  0.542 | 01 0.4988 | 02 0.4707 | 03 0.4569 |<br />
 | 04 0.5585 |           | 06 0.3583 |           |<br />
 | 08 0.5918 | 09 0.6431 | 10 0.6152 |           |<br />
 |           | 13 0.7417 | 14 0.8628 |           |
-
-
+</pre>
